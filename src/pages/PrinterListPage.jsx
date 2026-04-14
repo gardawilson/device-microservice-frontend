@@ -122,7 +122,7 @@ function PrinterListPage() {
       {!loading && !error && filteredPrinters.length === 0 && (
         <EmptyState
           title="Printer tidak ditemukan"
-          description="Coba kata kunci lain atau cek data dari backend."
+          description="Coba kata kunci lain."
         />
       )}
       {!loading && !error && filteredPrinters.length > 0 && (

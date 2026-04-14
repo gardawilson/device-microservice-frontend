@@ -1,0 +1,7 @@
+services:
+  device-frontend:
+    build: .
+    container_name: device-frontend
+    ports:
+      - "8081:8081"
+    restart: unless-stopped

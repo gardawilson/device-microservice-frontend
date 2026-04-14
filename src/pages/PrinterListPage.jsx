@@ -1,0 +1,156 @@
+import { useCallback, useEffect, useMemo, useState } from "react";
+import AddPrinterModal from "../components/AddPrinterModal";
+import EmptyState from "../components/EmptyState";
+import EditPrinterModal from "../components/EditPrinterModal";
+import ErrorState from "../components/ErrorState";
+import Loader from "../components/Loader";
+import PrinterListTable from "../components/PrinterListTable";
+import SearchBar from "../components/SearchBar";
+import SettingMaxPrintCountModal from "../components/SettingMaxPrintCountModal";
+import { onPrintersUpdated } from "../hooks/usePrinterEvents";
+import { useToast } from "../hooks/useToast";
+import { printerService } from "../services/printerService";
+
+function PrinterListPage() {
+  const [printers, setPrinters] = useState([]);
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [addPrinterOpen, setAddPrinterOpen] = useState(false);
+  const [maxPrintOpen, setMaxPrintOpen] = useState(false);
+  const [selectedForEdit, setSelectedForEdit] = useState(null);
+  const [maxPrintCount, setMaxPrintCount] = useState(null);
+  const { addToast } = useToast();
+
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [printerData, maxPrintCountData] = await Promise.all([
+        printerService.getPrinters(),
+        printerService.getMaxPrintCountSetting(),
+      ]);
+      setPrinters(
+        Array.isArray(printerData)
+          ? printerData
+          : [printerData].filter(Boolean),
+      );
+      setMaxPrintCount(
+        maxPrintCountData?.maxPrintCount ?? maxPrintCountData?.value ?? null,
+      );
+    } catch (loadError) {
+      setError(loadError.message || "Gagal mengambil data printer.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  useEffect(() => onPrintersUpdated(loadData), [loadData]);
+
+  const filteredPrinters = useMemo(() => {
+    if (!search.trim()) return printers;
+    const keyword = search.toLowerCase();
+    return printers.filter((printer) => {
+      const identifier = String(
+        printer.identifier || printer.id || "",
+      ).toLowerCase();
+      const name = String(printer.name || "").toLowerCase();
+      return identifier.includes(keyword) || name.includes(keyword);
+    });
+  }, [printers, search]);
+
+  const handleDeletePrinter = async (printer) => {
+    if (!printer?.id && !printer?.identifier) {
+      addToast({ type: "error", message: "Data printer tidak valid." });
+      return;
+    }
+
+    const displayId = printer?.identifier || printer?.id;
+    const confirmed = window.confirm(`Hapus printer ${displayId}?`);
+    if (!confirmed) return;
+
+    try {
+      await printerService.deletePrinter({
+        id: printer?.id,
+        identifier: printer?.identifier,
+      });
+      addToast({ type: "success", message: "Printer berhasil dihapus." });
+      loadData();
+    } catch (deleteError) {
+      addToast({
+        type: "error",
+        message: deleteError.message || "Gagal menghapus printer.",
+      });
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-2xl font-bold text-slate-900">Printer List</h1>
+          <p className="text-sm text-slate-600">
+            Kelola data printer, detail penggunaan, dan reset printer.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn-secondary"
+            type="button"
+            onClick={() => setMaxPrintOpen(true)}
+          >
+            Max Print Count
+          </button>
+          <button
+            className="btn-primary"
+            type="button"
+            onClick={() => setAddPrinterOpen(true)}
+          >
+            Add Printer
+          </button>
+        </div>
+      </div>
+
+      <SearchBar value={search} onChange={setSearch} />
+
+      {loading && <Loader text="Memuat daftar printer..." />}
+      {!loading && error && <ErrorState message={error} onRetry={loadData} />}
+      {!loading && !error && filteredPrinters.length === 0 && (
+        <EmptyState
+          title="Printer tidak ditemukan"
+          description="Coba kata kunci lain atau cek data dari backend."
+        />
+      )}
+      {!loading && !error && filteredPrinters.length > 0 && (
+        <PrinterListTable
+          printers={filteredPrinters}
+          onOpenEdit={setSelectedForEdit}
+          onDelete={handleDeletePrinter}
+        />
+      )}
+      <EditPrinterModal
+        isOpen={Boolean(selectedForEdit)}
+        printer={selectedForEdit}
+        onClose={() => setSelectedForEdit(null)}
+        onSuccess={loadData}
+      />
+      <SettingMaxPrintCountModal
+        isOpen={maxPrintOpen}
+        value={maxPrintCount}
+        onClose={() => setMaxPrintOpen(false)}
+        onUpdated={setMaxPrintCount}
+      />
+      <AddPrinterModal
+        isOpen={addPrinterOpen}
+        onClose={() => setAddPrinterOpen(false)}
+        onSuccess={loadData}
+      />
+    </section>
+  );
+}
+
+export default PrinterListPage;

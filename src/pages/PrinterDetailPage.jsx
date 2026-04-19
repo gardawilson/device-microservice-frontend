@@ -221,16 +221,12 @@ function LegendRow({ item, renderIcon }) {
 }
 
 function PieSection({ title, pie, renderIcon, centerValue, centerLabel }) {
-  const animTotal = useCountUp(pie.total);
   return (
     <div className="flex flex-col gap-4 p-5">
       <div className="flex items-center justify-between">
         <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
           {title}
         </p>
-        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">
-          {animTotal} prints
-        </span>
       </div>
       {pie.enriched.length === 0 ? (
         <p className="text-sm text-slate-400">No data.</p>
@@ -419,9 +415,6 @@ function DailyProgressChart({ summaryData }) {
           <span className="rounded-full bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
             {formatDateLong(summaryData.range?.from)} →{" "}
             {formatDateLong(summaryData.range?.to)}
-          </span>
-          <span className="rounded-full bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
-            {summaryData.totalPrintCount ?? 0} prints
           </span>
         </div>
       </div>

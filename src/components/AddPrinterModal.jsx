@@ -70,7 +70,7 @@ function AddPrinterModal({ isOpen, onClose, onSuccess }) {
           <input
             id="add-printer-name"
             className="input"
-            placeholder="Zebra Printer 1"
+            placeholder="PANDA 1"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />

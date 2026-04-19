@@ -67,7 +67,7 @@ function EditPrinterModal({ isOpen, onClose, printer, onSuccess }) {
           <input
             id="edit-printer-name"
             className="input"
-            placeholder="Zebra Printer 2"
+            placeholder="PANDA 2"
             value={name}
             onChange={(event) => setName(event.target.value)}
           />

@@ -364,9 +364,10 @@ function DailyProgressChart({ summaryData }) {
 
   if (!summaryData) return null;
 
-  const dailySummary = Array.isArray(summaryData.dailySummary)
-    ? summaryData.dailySummary
-    : [];
+  const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD local
+  const dailySummary = (
+    Array.isArray(summaryData.dailySummary) ? summaryData.dailySummary : []
+  ).filter((d) => !d.date || d.date <= todayStr);
 
   if (dailySummary.length === 0) {
     return (

@@ -7,7 +7,9 @@ function Tabs({ tabs, active, onChange }) {
             key={tab.value}
             type="button"
             className={`rounded-t-xl px-4 py-2 text-sm font-medium transition-colors ${
-              active === tab.value ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+              active === tab.value
+                ? "bg-brand-600 text-white"
+                : "bg-slate-100 text-slate-700 hover:bg-slate-200"
             }`}
             onClick={() => onChange(tab.value)}
           >

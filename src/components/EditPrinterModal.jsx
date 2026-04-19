@@ -37,7 +37,10 @@ function EditPrinterModal({ isOpen, onClose, printer, onSuccess }) {
       onSuccess?.();
       onClose();
     } catch (error) {
-      addToast({ type: "error", message: error.message || "Gagal update printer." });
+      addToast({
+        type: "error",
+        message: error.message || "Gagal update printer.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -48,7 +51,7 @@ function EditPrinterModal({ isOpen, onClose, printer, onSuccess }) {
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div>
           <label className="label" htmlFor="edit-printer-identifier">
-            Identifier
+            MAC Address
           </label>
           <input
             id="edit-printer-identifier"

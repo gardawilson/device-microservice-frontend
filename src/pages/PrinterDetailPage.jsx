@@ -11,160 +11,692 @@ import { formatDateTime, formatDisplayValue } from "../utils/formatters";
 
 const LIMIT = 10;
 
-const APP_PALETTE = [
-  {
-    color: "#1087dc",
-    bg: "bg-brand-500",
-    text: "text-brand-600",
-    trackBg: "bg-brand-100",
-  },
-  {
-    color: "#7c3aed",
-    bg: "bg-violet-500",
-    text: "text-violet-600",
-    trackBg: "bg-violet-100",
-  },
-  {
-    color: "#059669",
-    bg: "bg-emerald-500",
-    text: "text-emerald-600",
-    trackBg: "bg-emerald-100",
-  },
-  {
-    color: "#d97706",
-    bg: "bg-amber-500",
-    text: "text-amber-600",
-    trackBg: "bg-amber-100",
-  },
-  {
-    color: "#e11d48",
-    bg: "bg-rose-500",
-    text: "text-rose-600",
-    trackBg: "bg-rose-100",
-  },
+function useCountUp(target, duration = 800) {
+  const [value, setValue] = useState(0);
+  useEffect(() => {
+    if (!target) {
+      setValue(0);
+      return;
+    }
+    let start = null;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const progress = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(Math.round(eased * target));
+      if (progress < 1) requestAnimationFrame(step);
+    };
+    const id = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(id);
+  }, [target, duration]);
+  return value;
+}
+
+const SOURCE_APP_BADGE_MAP = {
+  WPS: "bg-emerald-100 text-emerald-700",
+  PPS: "bg-brand-100 text-brand-700",
+};
+
+const getSourceAppBadge = (sourceApp) =>
+  SOURCE_APP_BADGE_MAP[String(sourceApp || "").toUpperCase()] ??
+  "bg-amber-100 text-amber-700";
+
+const formatDateLong = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(date);
+};
+
+const formatCompactDate = (value) => {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+  }).format(date);
+};
+
+const USER_COLORS = [
+  "#1087dc",
+  "#7c3aed",
+  "#059669",
+  "#d97706",
+  "#e11d48",
+  "#0891b2",
+  "#be185d",
 ];
 
-function SourceAppSummary({ summary }) {
-  if (!Array.isArray(summary) || summary.length === 0) return null;
+function buildPieSegments(items, getColor) {
+  const radius = 54;
+  const circumference = 2 * Math.PI * radius;
+  const total = items.reduce((s, item) => s + (item.count ?? 0), 0);
+  let offset = 0;
+  const enriched = items.map((item, index) => {
+    const count = item.count ?? 0;
+    const percent = total > 0 ? count / total : 0;
+    const dash = percent * circumference;
+    const segment = {
+      ...item,
+      color: getColor(item, index),
+      percent,
+      dash,
+      offset,
+    };
+    offset += dash;
+    return segment;
+  });
+  return { enriched, total, radius, circumference };
+}
 
-  const sorted = [...summary].sort((a, b) => b.count - a.count);
-  const total = sorted.reduce((sum, s) => sum + (s.count ?? 0), 0);
-  const max = sorted[0]?.count ?? 1;
+function MiniDonut({
+  enriched,
+  total,
+  radius,
+  circumference,
+  centerValue,
+  centerLabel,
+}) {
+  const [hoveredIndex, setHoveredIndex] = useState(null);
+  const [animMounted, setAnimMounted] = useState(false);
 
-  const enriched = sorted.map((s, i) => ({
-    ...s,
-    pct: total > 0 ? ((s.count / total) * 100).toFixed(1) : "0.0",
-    barWidth: total > 0 ? Math.round((s.count / total) * 100) : 0,
-    palette: APP_PALETTE[i % APP_PALETTE.length],
-    rank: i + 1,
-  }));
+  useEffect(() => {
+    setAnimMounted(false);
+    const t = setTimeout(() => setAnimMounted(true), 50);
+    return () => clearTimeout(t);
+  }, [enriched]);
+
+  const hovered = hoveredIndex !== null ? enriched[hoveredIndex] : null;
+
+  const displayValue = hovered ? hovered.count : (centerValue ?? total);
+  const displayLabel = hovered ? hovered.label : (centerLabel ?? "prints");
+  const displayPct = hovered ? `${(hovered.percent * 100).toFixed(1)}%` : null;
 
   return (
-    <div className="mb-5 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      {/* ── Header ── */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-3">
-        <div className="flex items-center gap-2">
-          {/* bar-chart icon */}
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 15 15"
-            fill="none"
-            className="text-brand-600"
+    <div className="relative mx-auto h-36 w-36 shrink-0">
+      <svg viewBox="0 0 140 140" className="h-full w-full -rotate-90">
+        <circle
+          cx="70"
+          cy="70"
+          r={radius}
+          fill="none"
+          stroke="#e2e8f0"
+          strokeWidth="16"
+        />
+        {enriched.map((item, i) => {
+          const isHovered = hoveredIndex === i;
+          const isDimmed = hoveredIndex !== null && !isHovered;
+          return (
+            <circle
+              key={i}
+              cx="70"
+              cy="70"
+              r={radius}
+              fill="none"
+              stroke={item.color}
+              strokeWidth={isHovered ? 22 : 16}
+              strokeDasharray={
+                animMounted
+                  ? `${item.dash} ${circumference - item.dash}`
+                  : `0 ${circumference}`
+              }
+              strokeDashoffset={-item.offset}
+              strokeLinecap="round"
+              opacity={isDimmed ? 0.3 : 1}
+              style={{
+                cursor: "pointer",
+                transition:
+                  "stroke-dasharray 0.7s cubic-bezier(0.4,0,0.2,1), stroke-width 0.2s ease, opacity 0.2s ease",
+              }}
+              onMouseEnter={() => setHoveredIndex(i)}
+              onMouseLeave={() => setHoveredIndex(null)}
+            />
+          );
+        })}
+      </svg>
+      <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center px-2 text-center">
+        <span
+          className="text-lg font-bold leading-tight transition-colors duration-200"
+          style={{ color: hovered ? hovered.color : "#0f172a" }}
+        >
+          {displayValue}
+        </span>
+        <span className="mt-0.5 line-clamp-1 max-w-[80px] text-[10px] font-semibold text-slate-500">
+          {displayLabel}
+        </span>
+        {displayPct && (
+          <span
+            className="text-[10px] font-bold"
+            style={{ color: hovered?.color }}
           >
-            <rect
-              x="1"
-              y="7"
-              width="3"
-              height="7"
-              rx="1"
-              fill="currentColor"
-              opacity=".4"
-            />
-            <rect
-              x="6"
-              y="4"
-              width="3"
-              height="10"
-              rx="1"
-              fill="currentColor"
-              opacity=".7"
-            />
-            <rect
-              x="11"
-              y="1"
-              width="3"
-              height="13"
-              rx="1"
-              fill="currentColor"
-            />
-          </svg>
-          <span className="text-sm font-semibold text-slate-700">
-            Print by Source App
+            {displayPct}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function LegendRow({ item, renderIcon }) {
+  const animCount = useCountUp(item.count);
+  const [barMounted, setBarMounted] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setBarMounted(true), 50);
+    return () => clearTimeout(t);
+  }, [item.count]);
+  return (
+    <div className="flex items-center gap-2.5 rounded-xl bg-slate-50 px-3 py-2">
+      {renderIcon(item)}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <span className="truncate text-sm font-semibold text-slate-700">
+            {item.label}
+          </span>
+          <span className="shrink-0 text-sm font-bold text-slate-900">
+            {animCount}
           </span>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-xs text-slate-400">{enriched.length} app</span>
+        <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-slate-200">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: barMounted
+                ? `${Math.max(item.percent * 100, item.count > 0 ? 6 : 0)}%`
+                : "0%",
+              backgroundColor: item.color,
+            }}
+          />
+        </div>
+      </div>
+      <span className="w-10 shrink-0 text-right text-xs font-semibold text-slate-400">
+        {(item.percent * 100).toFixed(1)}%
+      </span>
+    </div>
+  );
+}
+
+function PieSection({ title, pie, renderIcon, centerValue, centerLabel }) {
+  const animTotal = useCountUp(pie.total);
+  return (
+    <div className="flex flex-col gap-4 p-5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold uppercase tracking-wide text-slate-500">
+          {title}
+        </p>
+        <span className="rounded-full bg-brand-50 px-2.5 py-0.5 text-xs font-bold text-brand-700">
+          {animTotal} prints
+        </span>
+      </div>
+      {pie.enriched.length === 0 ? (
+        <p className="text-sm text-slate-400">No data.</p>
+      ) : (
+        <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-start">
+          <MiniDonut
+            {...pie}
+            centerValue={centerValue}
+            centerLabel={centerLabel}
+          />
+          <div className="w-full space-y-2">
+            {pie.enriched.map((item, i) => (
+              <LegendRow key={i} item={item} renderIcon={renderIcon} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DailySummary({ summaryData }) {
+  return (
+    <div className="space-y-5">
+      <PrintSummaryCard summaryData={summaryData} />
+      <DailyProgressChart summaryData={summaryData} />
+    </div>
+  );
+}
+
+function PrintSummaryCard({ summaryData }) {
+  if (!summaryData) return null;
+
+  const sourceApps = Array.isArray(summaryData.sourceAppSummary)
+    ? summaryData.sourceAppSummary
+    : [];
+
+  const dailySummary = Array.isArray(summaryData.dailySummary)
+    ? summaryData.dailySummary
+    : [];
+
+  const userMap = {};
+  for (const day of dailySummary) {
+    for (const user of Array.isArray(day.users) ? day.users : []) {
+      const key = user.printBy || "unknown";
+      userMap[key] = (userMap[key] ?? 0) + (user.printCount ?? 0);
+    }
+  }
+
+  const appItems = sourceApps.map((item) => ({
+    label: item.sourceApp,
+    count: item.count ?? 0,
+  }));
+
+  const userItems = Object.entries(userMap)
+    .map(([printBy, count]) => ({ label: printBy, count }))
+    .sort((a, b) => b.count - a.count);
+
+  const appPie = buildPieSegments(appItems, (item) => {
+    const key = String(item.label || "").toUpperCase();
+    if (key === "WPS" || key === "WIPS") return "#059669";
+    if (key === "PPS") return "#1087dc";
+    return "#d97706";
+  });
+
+  const userPie = buildPieSegments(
+    userItems,
+    (_, index) => USER_COLORS[index % USER_COLORS.length],
+  );
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="border-b border-slate-100 bg-slate-50 px-5 py-3">
+        <p className="text-sm font-semibold text-slate-700">
+          Print Distribution
+        </p>
+        <p className="text-xs text-slate-500">
+          Breakdown by source app and user
+        </p>
+      </div>
+      <div className="grid divide-y divide-slate-100 lg:grid-cols-2 lg:divide-x lg:divide-y-0">
+        <PieSection
+          title="By Source App"
+          pie={appPie}
+          renderIcon={(item) => (
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ backgroundColor: item.color }}
+            />
+          )}
+        />
+        <PieSection
+          title="By User"
+          pie={userPie}
+          centerValue={userItems.length}
+          centerLabel="users"
+          renderIcon={(item) => (
+            <span
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold uppercase text-white"
+              style={{ backgroundColor: item.color }}
+            >
+              {String(item.label)[0]}
+            </span>
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+const BAR_COLORS_HEX = ["#1087dc", "#7c3aed", "#059669", "#d97706", "#e11d48"];
+
+function DailyProgressChart({ summaryData }) {
+  const [selectedIndex, setSelectedIndex] = useState(null);
+  const [mounted, setMounted] = useState(false);
+  const [tooltip, setTooltip] = useState(null);
+
+  useEffect(() => {
+    setMounted(false);
+    const t = setTimeout(() => setMounted(true), 50);
+    return () => clearTimeout(t);
+  }, [summaryData]);
+
+  const handleBarMouseMove = (e, day) => {
+    setTooltip({ x: e.clientX, y: e.clientY, day });
+  };
+
+  const handleBarMouseLeave = () => {
+    setTooltip(null);
+  };
+
+  if (!summaryData) return null;
+
+  const dailySummary = Array.isArray(summaryData.dailySummary)
+    ? summaryData.dailySummary
+    : [];
+
+  if (dailySummary.length === 0) {
+    return (
+      <EmptyState
+        title="No daily data"
+        description="There is no daily data for the selected date range."
+      />
+    );
+  }
+
+  const maxDailyCount = Math.max(
+    ...dailySummary.map((item) => item.totalPrintCount ?? 0),
+    1,
+  );
+
+  const totalAll = dailySummary.reduce(
+    (s, d) => s + (d.totalPrintCount ?? 0),
+    0,
+  );
+  const avgCount = Math.round(totalAll / dailySummary.length);
+
+  const selectedDay =
+    selectedIndex !== null ? dailySummary[selectedIndex] : null;
+  const selectedUsers = Array.isArray(selectedDay?.users)
+    ? selectedDay.users
+    : [];
+  const selectedColor =
+    selectedIndex !== null
+      ? BAR_COLORS_HEX[selectedIndex % BAR_COLORS_HEX.length]
+      : null;
+
+  const animTotal = useCountUp(totalAll);
+  const animMax = useCountUp(maxDailyCount);
+  const animAvg = useCountUp(avgCount);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-700">Daily Summary</p>
+          <p className="text-xs text-slate-500">
+            Click a bar to view daily details.
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-600">
+            {summaryData.scope === "custom" ? "Custom range" : "Last 7 days"}
+          </span>
           <span className="rounded-full bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
-            {total} total
+            {formatDateLong(summaryData.range?.from)} →{" "}
+            {formatDateLong(summaryData.range?.to)}
+          </span>
+          <span className="rounded-full bg-brand-50 px-3 py-0.5 text-xs font-bold text-brand-700">
+            {summaryData.totalPrintCount ?? 0} prints
           </span>
         </div>
       </div>
 
-      {/* ── Bar Race ── */}
-      <div className="divide-y divide-slate-50 px-5 py-2">
-        {enriched.map((s) => (
-          <div key={s.sourceApp} className="flex items-center gap-4 py-3">
-            {/* Rank */}
-            <span className="w-4 shrink-0 text-center text-xs font-bold text-slate-300">
-              #{s.rank}
-            </span>
+      <div className="p-5">
+        <div className="mb-4 flex flex-wrap gap-3">
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+            <span className="text-slate-500">Total</span>
+            <span className="font-bold text-slate-900">{animTotal}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+            <span className="text-slate-500">Max/day</span>
+            <span className="font-bold text-slate-900">{animMax}</span>
+          </div>
+          <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 text-sm">
+            <span className="text-slate-500">Avg/day</span>
+            <span className="font-bold text-slate-900">{animAvg}</span>
+          </div>
+          {selectedIndex !== null && (
+            <button
+              type="button"
+              className="flex items-center gap-1.5 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200"
+              onClick={() => setSelectedIndex(null)}
+            >
+              ✕ Close detail
+            </button>
+          )}
+        </div>
 
-            {/* App name */}
-            <div className="w-24 shrink-0">
-              <span className={`text-sm font-semibold ${s.palette.text}`}>
-                {s.sourceApp}
+        <div className="grid gap-0 lg:grid-cols-[56px_minmax(0,1fr)]">
+          {/* skala kiri */}
+          <div className="relative hidden h-[280px] shrink-0 text-right text-[11px] text-slate-400 lg:block">
+            {[1, 0.75, 0.5, 0.25, 0].map((ratio) => (
+              <span
+                key={ratio}
+                className="absolute right-0 -translate-y-1/2"
+                style={{ top: `${(1 - ratio) * 100}%` }}
+              >
+                {Math.ceil(maxDailyCount * ratio)}
               </span>
+            ))}
+          </div>
+
+          {/* area bar */}
+          <div className="relative h-[280px] min-w-0">
+            <div className="pointer-events-none absolute inset-0 hidden lg:block">
+              {[0, 25, 50, 75, 100].map((pct) => (
+                <div
+                  key={pct}
+                  className="absolute inset-x-0 border-t border-dashed border-slate-200"
+                  style={{ top: `${pct}%` }}
+                />
+              ))}
             </div>
 
-            {/* Bar track */}
-            <div
-              className={`h-7 flex-1 overflow-hidden rounded-lg ${s.palette.trackBg}`}
-            >
+            {avgCount > 0 && (
               <div
-                className={`flex h-full items-center justify-end rounded-lg px-2.5 ${s.palette.bg} transition-all duration-700 ease-out`}
-                style={{ width: `${s.barWidth}%`, minWidth: "2.5rem" }}
+                className="pointer-events-none absolute inset-x-0 z-10 hidden lg:block"
+                style={{
+                  top: `${((maxDailyCount - avgCount) / maxDailyCount) * 100}%`,
+                }}
               >
-                <span className="text-xs font-bold text-white drop-shadow-sm">
-                  {s.count}
+                <div className="border-t-2 border-dashed border-brand-400 opacity-50" />
+                <span className="absolute right-0 -top-4 text-[10px] font-semibold text-brand-500">
+                  avg
+                </span>
+              </div>
+            )}
+
+            <div
+              className="grid h-full items-end gap-1.5"
+              style={{
+                gridTemplateColumns: `repeat(${dailySummary.length}, minmax(0, 1fr))`,
+              }}
+            >
+              {dailySummary.map((day, index) => {
+                const total = day.totalPrintCount ?? 0;
+                const barPct =
+                  total > 0 ? Math.max((total / maxDailyCount) * 100, 4) : 0;
+                const colorHex = BAR_COLORS_HEX[index % BAR_COLORS_HEX.length];
+                const isSelected = selectedIndex === index;
+                const isDimmed =
+                  selectedIndex !== null && selectedIndex !== index;
+
+                return (
+                  <div
+                    key={day.date}
+                    className={`relative flex h-full cursor-pointer items-end justify-center rounded-t-xl px-1 transition-all duration-200 ${
+                      isSelected ? "bg-slate-100" : "hover:bg-slate-100"
+                    } ${isDimmed ? "opacity-40" : ""}`}
+                    onClick={() => setSelectedIndex(isSelected ? null : index)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ")
+                        setSelectedIndex(isSelected ? null : index);
+                    }}
+                    onMouseMove={(e) => handleBarMouseMove(e, day)}
+                    onMouseLeave={handleBarMouseLeave}
+                    role="button"
+                    tabIndex={0}
+                    aria-pressed={isSelected}
+                    aria-label={`${day.date}: ${total} print`}
+                  >
+                    <div
+                      className="relative w-full max-w-10 rounded-t-lg transition-all duration-700 ease-out"
+                      style={{
+                        height: mounted ? `${barPct}%` : "0%",
+                        backgroundColor: colorHex,
+                        opacity: isSelected ? 1 : isDimmed ? 0.5 : 0.8,
+                        boxShadow: isSelected
+                          ? `0 4px 14px 0 ${colorHex}55`
+                          : "none",
+                        transform: isSelected ? "scaleX(1.08)" : "scaleX(1)",
+                      }}
+                    >
+                      {total > 0 && (
+                        <span
+                          className={`absolute -top-5 left-1/2 -translate-x-1/2 whitespace-nowrap text-[11px] font-bold transition-colors duration-200 ${
+                            isSelected ? "text-slate-900" : "text-slate-400"
+                          }`}
+                        >
+                          {total}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* spacer skala kiri untuk baris tanggal */}
+          <div className="hidden lg:block" />
+
+          {/* baris tanggal — di bawah garis 0 */}
+          <div
+            className="mt-2 grid gap-1.5"
+            style={{
+              gridTemplateColumns: `repeat(${dailySummary.length}, minmax(0, 1fr))`,
+            }}
+          >
+            {dailySummary.map((day, index) => {
+              const isSelected = selectedIndex === index;
+              return (
+                <div key={day.date} className="text-center">
+                  <p
+                    className={`text-[11px] font-semibold transition-colors duration-200 ${
+                      isSelected ? "text-brand-600" : "text-slate-500"
+                    }`}
+                  >
+                    {formatCompactDate(day.date)}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {selectedDay && (
+          <div
+            className="mt-5 overflow-hidden rounded-2xl border transition-all duration-300"
+            style={{ borderColor: `${selectedColor}44` }}
+          >
+            <div
+              className="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
+              style={{ backgroundColor: `${selectedColor}12` }}
+            >
+              <div className="flex items-center gap-3">
+                <span
+                  className="h-3 w-3 rounded-full"
+                  style={{ backgroundColor: selectedColor }}
+                />
+                <div>
+                  <p className="text-sm font-bold text-slate-800">
+                    {selectedDay.date}
+                  </p>
+                  <p className="text-xs text-slate-500">Detail per user</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span
+                  className="rounded-full px-3 py-0.5 text-xs font-bold text-white"
+                  style={{ backgroundColor: selectedColor }}
+                >
+                  {selectedDay.totalPrintCount ?? 0} prints
+                </span>
+                <span className="rounded-full bg-slate-100 px-3 py-0.5 text-xs font-semibold text-slate-600">
+                  {selectedUsers.length} user
                 </span>
               </div>
             </div>
 
-            {/* Percentage */}
-            <div className="w-12 shrink-0 text-right">
-              <span className="text-sm font-bold text-slate-700">{s.pct}%</span>
+            <div className="p-4">
+              {selectedUsers.length === 0 ? (
+                <p className="text-sm text-slate-400">
+                  No user data available.
+                </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {selectedUsers.map((user, i) => {
+                    const pct =
+                      (selectedDay.totalPrintCount ?? 0) > 0
+                        ? ((user.printCount ?? 0) /
+                            (selectedDay.totalPrintCount ?? 1)) *
+                          100
+                        : 0;
+                    return (
+                      <div
+                        key={`${selectedDay.date}-${user.printBy || "anon"}-${i}`}
+                        className="rounded-xl border border-slate-100 bg-white p-3 shadow-sm"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-semibold text-slate-700">
+                            {user.printBy || "unknown"}
+                          </span>
+                          <span className="shrink-0 text-sm font-bold text-slate-900">
+                            {user.printCount ?? 0}
+                          </span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full transition-all duration-700"
+                            style={{
+                              width: `${pct}%`,
+                              backgroundColor: selectedColor,
+                            }}
+                          />
+                        </div>
+                        <p className="mt-1.5 text-[11px] text-slate-400">
+                          {user.logCount ?? 0} log · {pct.toFixed(1)}%
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
-        ))}
+        )}
       </div>
 
-      {/* ── Footer ── */}
-      <div className="border-t border-slate-100 bg-slate-50 px-5 py-2.5">
-        <div className="flex items-center gap-4">
-          <span className="text-xs text-slate-400">
-            Bar width relatif terhadap app terbanyak
-          </span>
-          <div className="ml-auto flex items-center gap-3">
-            {enriched.map((s) => (
-              <div key={s.sourceApp} className="flex items-center gap-1.5">
-                <span className={`h-2 w-2 rounded-full ${s.palette.bg}`} />
-                <span className="text-xs text-slate-500">{s.sourceApp}</span>
-              </div>
-            ))}
+      {tooltip && (
+        <div
+          className="pointer-events-none fixed z-50 w-52 rounded-xl border border-slate-200 bg-white p-3 shadow-lg"
+          style={{ left: tooltip.x + 14, top: tooltip.y - 10 }}
+        >
+          <div className="mb-2 border-b border-slate-100 pb-2">
+            <p className="text-xs font-semibold text-slate-500">
+              {formatDateLong(tooltip.day.date)}
+            </p>
+            <p className="text-base font-bold text-slate-900">
+              {tooltip.day.totalPrintCount ?? 0}{" "}
+              <span className="text-xs font-normal text-slate-500">prints</span>
+            </p>
+          </div>
+          <div className="space-y-1">
+            {(Array.isArray(tooltip.day.users) ? tooltip.day.users : [])
+              .length === 0 ? (
+              <p className="text-xs text-slate-400">No user data.</p>
+            ) : (
+              tooltip.day.users.map((user, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between gap-2"
+                >
+                  <span className="truncate text-xs text-slate-600">
+                    {user.printBy || "unknown"}
+                  </span>
+                  <span className="shrink-0 text-xs font-bold text-slate-900">
+                    {user.printCount ?? 0}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -174,7 +706,7 @@ function Pagination({ page, totalPages, onPageChange, loading }) {
   return (
     <div className="mt-4 flex items-center justify-between gap-2 text-sm">
       <span className="text-slate-500">
-        Halaman {page} dari {totalPages}
+        Page {page} of {totalPages}
       </span>
       <div className="flex gap-2">
         <button
@@ -203,19 +735,45 @@ function PrinterDetailPage() {
   const [resetLogs, setResetLogs] = useState([]);
   const [printMeta, setPrintMeta] = useState({ page: 1, totalPages: 1 });
   const [resetMeta, setResetMeta] = useState({ page: 1, totalPages: 1 });
-  const [sourceAppSummary, setSourceAppSummary] = useState([]);
+  const [summaryData, setSummaryData] = useState(null);
+  const [summaryFrom, setSummaryFrom] = useState("");
+  const [summaryTo, setSummaryTo] = useState("");
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState("");
   const [activeTab, setActiveTab] = useState("print-logs");
   const [loading, setLoading] = useState(true);
   const [logLoading, setLogLoading] = useState(false);
   const [error, setError] = useState("");
-
   const [lookupId, setLookupId] = useState(null);
   const [resetOpen, setResetOpen] = useState(false);
+
+  const loadSummary = useCallback(async (printerKey, params = {}) => {
+    if (!printerKey) return null;
+    setSummaryLoading(true);
+    setSummaryError("");
+    try {
+      const payload = await printerService.getPrinterLogSummary(
+        printerKey,
+        params,
+      );
+      setSummaryData(payload || null);
+      setSummaryFrom(payload?.range?.from ?? params.from ?? "");
+      setSummaryTo(payload?.range?.to ?? params.to ?? "");
+      return payload;
+    } catch (loadError) {
+      setSummaryData(null);
+      setSummaryError(loadError.message || "Failed to load summary.");
+      return null;
+    } finally {
+      setSummaryLoading(false);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     if (!printerId) return;
     setLoading(true);
     setError("");
+    setSummaryError("");
     try {
       const routeValue = decodeURIComponent(printerId);
       let printerData = null;
@@ -247,15 +805,19 @@ function PrinterDetailPage() {
       lookupValue = printerData?.identifier || lookupValue;
       setLookupId(lookupValue);
 
-      const [printLogResult, resetResult] = await Promise.allSettled([
-        printerService.getPrinterLogsPayload(lookupValue, 1, LIMIT),
-        printerService.getResetLogsPayload(lookupValue, 1, LIMIT),
-      ]);
+      const [printLogResult, resetResult, summaryResult] =
+        await Promise.allSettled([
+          printerService.getPrinterLogsPayload(lookupValue, 1, LIMIT),
+          printerService.getResetLogsPayload(lookupValue, 1, LIMIT),
+          printerService.getPrinterLogSummary(lookupValue),
+        ]);
 
       const printPayload =
         printLogResult.status === "fulfilled" ? printLogResult.value : null;
       const resetPayload =
         resetResult.status === "fulfilled" ? resetResult.value : null;
+      const summaryPayload =
+        summaryResult.status === "fulfilled" ? summaryResult.value : null;
 
       const resolvedPrinter =
         printerData || printPayload?.printer || resetPayload?.printer || null;
@@ -275,11 +837,6 @@ function PrinterDetailPage() {
         page: printPayload?.pagination?.page ?? 1,
         totalPages: printPayload?.pagination?.totalPages ?? 1,
       });
-      setSourceAppSummary(
-        Array.isArray(printPayload?.sourceAppSummary)
-          ? printPayload.sourceAppSummary
-          : [],
-      );
 
       setResetLogs(
         Array.isArray(resetPayload?.resetLogs)
@@ -292,8 +849,23 @@ function PrinterDetailPage() {
         page: resetPayload?.pagination?.page ?? 1,
         totalPages: resetPayload?.pagination?.totalPages ?? 1,
       });
+
+      if (summaryPayload) {
+        setSummaryData(summaryPayload);
+        setSummaryFrom(summaryPayload?.range?.from ?? "");
+        setSummaryTo(summaryPayload?.range?.to ?? "");
+      } else {
+        setSummaryData(null);
+        setSummaryFrom("");
+        setSummaryTo("");
+        if (summaryResult.status === "rejected") {
+          setSummaryError(
+            summaryResult.reason?.message || "Failed to load summary.",
+          );
+        }
+      }
     } catch (loadError) {
-      setError(loadError.message || "Gagal mengambil detail printer.");
+      setError(loadError.message || "Failed to load printer details.");
     } finally {
       setLoading(false);
     }
@@ -320,11 +892,6 @@ function PrinterDetailPage() {
           page: payload?.pagination?.page ?? page,
           totalPages: payload?.pagination?.totalPages ?? 1,
         });
-        setSourceAppSummary(
-          Array.isArray(payload?.sourceAppSummary)
-            ? payload.sourceAppSummary
-            : [],
-        );
       } finally {
         setLogLoading(false);
       }
@@ -364,13 +931,13 @@ function PrinterDetailPage() {
     loadData();
   }, [loadData]);
 
-  if (loading) return <Loader text="Memuat detail printer..." />;
+  if (loading) return <Loader text="Loading printer details..." />;
   if (error) return <ErrorState message={error} onRetry={loadData} />;
   if (!printer)
     return (
       <EmptyState
-        title="Printer tidak ditemukan"
-        description={`Data printer ${printerId} tidak tersedia.`}
+        title="Printer not found"
+        description={`No data available for printer ${printerId}.`}
       />
     );
 
@@ -379,11 +946,24 @@ function PrinterDetailPage() {
   const onPageChange =
     activeTab === "print-logs" ? loadPrintPage : loadResetPage;
 
+  const applySummaryRange = async () => {
+    if (!lookupId) return;
+    await loadSummary(lookupId, {
+      from: summaryFrom || undefined,
+      to: summaryTo || undefined,
+    });
+  };
+
+  const resetSummaryRange = async () => {
+    if (!lookupId) return;
+    await loadSummary(lookupId);
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <Link to="/printers" className="btn-secondary">
-          Kembali ke List
+          Back to List
         </Link>
         <div className="flex gap-2">
           <button
@@ -424,17 +1004,66 @@ function PrinterDetailPage() {
             </p>
           </div>
           <div>
-            <p className="text-slate-500">Created At</p>
+            <p className="text-slate-500">Last Used By</p>
             <p className="font-semibold text-slate-900">
-              {formatDateTime(printer.createdAt)}
+              {formatDisplayValue(printer.lastUsedBy)}
             </p>
           </div>
-          <div>
-            <p className="text-slate-500">Updated At</p>
-            <p className="font-semibold text-slate-900">
-              {formatDateTime(printer.updatedAt)}
-            </p>
+        </div>
+
+        <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-slate-500">From</span>
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 outline-none transition focus:border-brand-500"
+                type="date"
+                value={summaryFrom}
+                onChange={(event) => setSummaryFrom(event.target.value)}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-slate-500">To</span>
+              <input
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-slate-800 outline-none transition focus:border-brand-500"
+                type="date"
+                value={summaryTo}
+                onChange={(event) => setSummaryTo(event.target.value)}
+              />
+            </label>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={applySummaryRange}
+              disabled={summaryLoading}
+            >
+              Apply
+            </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={resetSummaryRange}
+              disabled={summaryLoading}
+            >
+              Reset
+            </button>
           </div>
+
+          {summaryLoading && (
+            <div className="py-3 text-sm text-slate-500">
+              Loading summary...
+            </div>
+          )}
+
+          {!summaryLoading && summaryError && (
+            <ErrorState message={summaryError} onRetry={resetSummaryRange} />
+          )}
+
+          {!summaryLoading && !summaryError && (
+            <div className="mt-4">
+              <DailySummary summaryData={summaryData} />
+            </div>
+          )}
         </div>
       </article>
 
@@ -449,24 +1078,18 @@ function PrinterDetailPage() {
         />
 
         <div className="mt-4">
-          {activeTab === "print-logs" && (
-            <SourceAppSummary summary={sourceAppSummary} />
-          )}
-
           {logLoading && (
             <div className="py-6 text-center text-sm text-slate-400">
-              Memuat log...
+              Loading logs...
             </div>
           )}
 
           {!logLoading && logRows.length === 0 && (
             <EmptyState
               title={
-                activeTab === "print-logs"
-                  ? "Print logs kosong"
-                  : "Reset logs kosong"
+                activeTab === "print-logs" ? "No print logs" : "No reset logs"
               }
-              description="Belum ada data log untuk printer ini."
+              description="No log data available for this printer."
             />
           )}
 
@@ -485,13 +1108,7 @@ function PrinterDetailPage() {
                   </thead>
                   <tbody>
                     {printLogs.map((log) => {
-                      const appIndex = sourceAppSummary.findIndex(
-                        (s) => s.sourceApp === log.sourceApp,
-                      );
-                      const palette =
-                        APP_PALETTE[
-                          (appIndex >= 0 ? appIndex : 0) % APP_PALETTE.length
-                        ];
+                      const badgeClass = getSourceAppBadge(log.sourceApp);
                       return (
                         <tr key={log.id} className="border-t border-slate-100">
                           <td className="px-3 py-2 font-mono text-xs text-slate-500">
@@ -499,7 +1116,7 @@ function PrinterDetailPage() {
                           </td>
                           <td className="px-3 py-2">
                             <span
-                              className={`rounded px-2 py-0.5 text-xs font-medium ${palette.badge}`}
+                              className={`rounded px-2 py-0.5 text-xs font-medium ${badgeClass}`}
                             >
                               {formatDisplayValue(log.sourceApp)}
                             </span>

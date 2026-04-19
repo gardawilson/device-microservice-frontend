@@ -2,12 +2,12 @@ function SearchBar({ value, onChange }) {
   return (
     <div className="panel p-4">
       <label htmlFor="search" className="label">
-        Cari Printer
+        Search Printer
       </label>
       <input
         id="search"
         className="input"
-        placeholder="Cari berdasarkan identifier atau name..."
+        placeholder="Search by mac address or name..."
         value={value}
         onChange={(event) => onChange(event.target.value)}
       />

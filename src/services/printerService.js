@@ -1,6 +1,7 @@
 import api from "../api/api";
 
-const normalizeData = (response) => response?.data?.data || response?.data || null;
+const normalizeData = (response) =>
+  response?.data?.data || response?.data || null;
 const normalizeList = (payload) => {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.printers)) return payload.printers;
@@ -20,7 +21,9 @@ export const printerService = {
     let lastError = null;
     for (const candidate of candidates) {
       try {
-        const response = await api.patch(`/${encodeURIComponent(candidate)}`, { name });
+        const response = await api.patch(`/${encodeURIComponent(candidate)}`, {
+          name,
+        });
         return normalizeData(response);
       } catch (error) {
         lastError = error;
@@ -54,7 +57,16 @@ export const printerService = {
     return normalizeList(normalizeData(response));
   },
   getPrinterLogsPayload: async (printerId, page = 1, limit = 10) => {
-    const response = await api.get("/log", { params: { printerId, page, limit } });
+    const response = await api.get("/log", {
+      params: { printerId, page, limit },
+    });
+    return normalizeData(response);
+  },
+  getPrinterLogSummary: async (printerId, params = {}) => {
+    const query = { printerId };
+    if (params.from) query.from = params.from;
+    if (params.to) query.to = params.to;
+    const response = await api.get("/log/summary", { params: query });
     return normalizeData(response);
   },
   addPrintLog: async (payload) => {
@@ -66,7 +78,9 @@ export const printerService = {
     return normalizeList(normalizeData(response));
   },
   getResetLogsPayload: async (printerId, page = 1, limit = 10) => {
-    const response = await api.get("/reset", { params: { printerId, page, limit } });
+    const response = await api.get("/reset", {
+      params: { printerId, page, limit },
+    });
     return normalizeData(response);
   },
   resetPrinter: async ({ printerId }) => {
@@ -78,7 +92,9 @@ export const printerService = {
     return normalizeData(response);
   },
   updateMaxPrintCountSetting: async (maxPrintCount) => {
-    const response = await api.put("/settings/max-print-count", { maxPrintCount });
+    const response = await api.put("/settings/max-print-count", {
+      maxPrintCount,
+    });
     return normalizeData(response);
   },
 };

@@ -20,11 +20,11 @@ function AddPrinterModal({ isOpen, onClose, onSuccess }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!mac.trim()) {
-      addToast({ type: "error", message: "MAC wajib diisi." });
+      addToast({ type: "error", message: "MAC address is required." });
       return;
     }
     if (!name.trim()) {
-      addToast({ type: "error", message: "Name wajib diisi." });
+      addToast({ type: "error", message: "Name is required." });
       return;
     }
 
@@ -34,12 +34,15 @@ function AddPrinterModal({ isOpen, onClose, onSuccess }) {
         mac: mac.trim(),
         name: name.trim(),
       });
-      addToast({ type: "success", message: "Printer berhasil ditambahkan." });
+      addToast({ type: "success", message: "Printer added successfully." });
       emitPrintersUpdated();
       onSuccess?.();
       onClose();
     } catch (error) {
-      addToast({ type: "error", message: error.message || "Gagal menambahkan printer." });
+      addToast({
+        type: "error",
+        message: error.message || "Failed to add printer.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -74,10 +77,10 @@ function AddPrinterModal({ isOpen, onClose, onSuccess }) {
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose}>
-            Batal
+            Cancel
           </button>
           <button type="submit" className="btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? "Menyimpan..." : "Add Printer"}
+            {isSubmitting ? "Saving..." : "Add Printer"}
           </button>
         </div>
       </form>

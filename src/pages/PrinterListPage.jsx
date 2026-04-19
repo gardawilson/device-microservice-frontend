@@ -39,7 +39,7 @@ function PrinterListPage() {
         maxPrintCountData?.maxPrintCount ?? maxPrintCountData?.value ?? null,
       );
     } catch (loadError) {
-      setError(loadError.message || "Gagal mengambil data printer.");
+      setError(loadError.message || "Failed to load printer data.");
     } finally {
       setLoading(false);
     }
@@ -65,12 +65,12 @@ function PrinterListPage() {
 
   const handleDeletePrinter = async (printer) => {
     if (!printer?.id && !printer?.identifier) {
-      addToast({ type: "error", message: "Data printer tidak valid." });
+      addToast({ type: "error", message: "Invalid printer data." });
       return;
     }
 
     const displayId = printer?.identifier || printer?.id;
-    const confirmed = window.confirm(`Hapus printer ${displayId}?`);
+    const confirmed = window.confirm(`Delete printer ${displayId}?`);
     if (!confirmed) return;
 
     try {
@@ -78,12 +78,12 @@ function PrinterListPage() {
         id: printer?.id,
         identifier: printer?.identifier,
       });
-      addToast({ type: "success", message: "Printer berhasil dihapus." });
+      addToast({ type: "success", message: "Printer deleted successfully." });
       loadData();
     } catch (deleteError) {
       addToast({
         type: "error",
-        message: deleteError.message || "Gagal menghapus printer.",
+        message: deleteError.message || "Failed to delete printer.",
       });
     }
   };
@@ -94,7 +94,7 @@ function PrinterListPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-2xl font-bold text-slate-900">Printer List</h1>
           <p className="text-sm text-slate-600">
-            Kelola data printer, detail penggunaan, dan reset printer.
+            Manage printers, view usage details, and perform resets.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -103,7 +103,7 @@ function PrinterListPage() {
             type="button"
             onClick={() => setMaxPrintOpen(true)}
           >
-            Max Print Count
+            Print Limit
           </button>
           <button
             className="btn-primary"
@@ -117,12 +117,12 @@ function PrinterListPage() {
 
       <SearchBar value={search} onChange={setSearch} />
 
-      {loading && <Loader text="Memuat daftar printer..." />}
+      {loading && <Loader text="Loading printers..." />}
       {!loading && error && <ErrorState message={error} onRetry={loadData} />}
       {!loading && !error && filteredPrinters.length === 0 && (
         <EmptyState
-          title="Printer tidak ditemukan"
-          description="Coba kata kunci lain."
+          title="No printers found"
+          description="Try a different keyword."
         />
       )}
       {!loading && !error && filteredPrinters.length > 0 && (
@@ -142,7 +142,10 @@ function PrinterListPage() {
         isOpen={maxPrintOpen}
         value={maxPrintCount}
         onClose={() => setMaxPrintOpen(false)}
-        onUpdated={setMaxPrintCount}
+        onUpdated={(val) => {
+          setMaxPrintCount(val);
+          loadData();
+        }}
       />
       <AddPrinterModal
         isOpen={addPrinterOpen}

@@ -11,7 +11,7 @@ function ResetPrinterModal({ isOpen, onClose, printer, onSuccess }) {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    const confirmed = window.confirm("Reset printer akan dijalankan. Lanjut?");
+    const confirmed = window.confirm("This will reset the printer. Continue?");
     if (!confirmed) return;
 
     try {
@@ -19,12 +19,15 @@ function ResetPrinterModal({ isOpen, onClose, printer, onSuccess }) {
       await printerService.resetPrinter({
         printerId: printer?.identifier || printer?.id || "",
       });
-      addToast({ type: "success", message: "Reset printer berhasil dijalankan." });
+      addToast({ type: "success", message: "Printer reset successfully." });
       emitPrintersUpdated();
       onSuccess?.();
       onClose();
     } catch (error) {
-      addToast({ type: "error", message: error.message || "Reset printer gagal." });
+      addToast({
+        type: "error",
+        message: error.message || "Failed to reset printer.",
+      });
     } finally {
       setIsSubmitting(false);
     }
@@ -34,7 +37,7 @@ function ResetPrinterModal({ isOpen, onClose, printer, onSuccess }) {
     <Modal isOpen={isOpen} title="Reset Printer" onClose={onClose}>
       <form className="space-y-4" onSubmit={handleSubmit}>
         <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-          Reset printer akan memanggil endpoint reset khusus.
+          This will reset the print count and status.
         </p>
         <div>
           <label className="label" htmlFor="reset-printer-id">
@@ -49,10 +52,10 @@ function ResetPrinterModal({ isOpen, onClose, printer, onSuccess }) {
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" className="btn-secondary" onClick={onClose}>
-            Batal
+            Cancel
           </button>
           <button type="submit" className="btn-danger" disabled={isSubmitting}>
-            {isSubmitting ? "Memproses..." : "Reset Printer"}
+            {isSubmitting ? "Processing..." : "Reset Printer"}
           </button>
         </div>
       </form>
